@@ -1,0 +1,21 @@
+{{define "layout.base"}}
+<!DOCTYPE html>
+<html lang="zh-tw">
+    <head>
+        <title></title>
+        <meta charset="UTF-8">
+        <meta name="format-detection" content="telephone=no,address=no,email=no">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <link rel="stylesheet" href="/assets/css/common.css">
+        {{template "customCss" }}
+        {{template "customScript" }}
+    </head>
+    <body>
+        {{template "content" }}
+    </body>
+</html>
+{{end}}
+
+{{define "customCss" }}{{end}}
+
+{{define "customScript" }}{{end}}
