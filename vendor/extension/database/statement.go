@@ -26,29 +26,31 @@ type RawUpdate struct {
 }
 
 type Sql struct {
-	fields    []string
-	table     string
-	wheres    []Where
-	leftjoins []Join
-	args      []interface{}
-	order     string
-	offset    string
-	limit     string
-	whereRaw  string
-	updateRaw []RawUpdate
-	statement string
+	fields     []string
+	table      string
+	wheres     []Where
+	innerjoins []Join
+	leftjoins  []Join
+	args       []interface{}
+	order      string
+	offset     string
+	limit      string
+	whereRaw   string
+	updateRaw  []RawUpdate
+	statement  string
 }
 
 var SqlPool = sync.Pool{
 	New: func() interface{} {
 		return &Sql{
-			fields:    make([]string, 0),
-			table:     "",
-			args:      make([]interface{}, 0),
-			wheres:    make([]Where, 0),
-			leftjoins: make([]Join, 0),
-			updateRaw: make([]RawUpdate, 0),
-			whereRaw:  "",
+			fields:     make([]string, 0),
+			table:      "",
+			args:       make([]interface{}, 0),
+			wheres:     make([]Where, 0),
+			innerjoins: make([]Join, 0),
+			leftjoins:  make([]Join, 0),
+			updateRaw:  make([]RawUpdate, 0),
+			whereRaw:   "",
 		}
 	},
 }
@@ -150,6 +152,16 @@ func (sql *Sql) UpdateRaw(raw string, args ...interface{}) *Sql {
 	sql.updateRaw = append(sql.updateRaw, RawUpdate{
 		expression: raw,
 		args:       args,
+	})
+	return sql
+}
+
+func (sql *Sql) Join(table string, fieldA string, operation string, fieldB string) *Sql {
+	sql.innerjoins = append(sql.innerjoins, Join{
+		fieldA:    fieldA,
+		fieldB:    fieldB,
+		table:     table,
+		operation: operation,
 	})
 	return sql
 }
@@ -282,6 +294,9 @@ func (sql *Sql) getJoins() string {
 		return ""
 	}
 	joins := ""
+	for _, join := range sql.innerjoins {
+		joins += " join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+	}
 	for _, join := range sql.leftjoins {
 		joins += " left join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
 	}
