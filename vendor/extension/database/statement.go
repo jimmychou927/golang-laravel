@@ -114,6 +114,18 @@ func (sql *Sql) WhereIn(field string, arg []interface{}) *Sql {
 	return sql
 }
 
+func (sql *Sql) WhereInQuery(field string, subSql *Sql) *Sql {
+	sql.wheres = append(sql.wheres, Where{
+		field:     field,
+		operation: "in",
+		qmark:     "(" + subSql.ToSQL() + ")",
+	})
+	if len(subSql.args) > 0 {
+		sql.args = append(sql.args, subSql.args...)
+	}
+	return sql
+}
+
 func (sql *Sql) WhereNotIn(field string, arg []interface{}) *Sql {
 	if len(arg) == 0 {
 		return sql
@@ -206,6 +218,11 @@ func (sql *Sql) All() ([]map[string]interface{}, error) {
 	res, _ := GetConnection().Query(sql.statement, sql.args...)
 
 	return res, nil
+}
+
+func (sql *Sql) ToSQL() string {
+	return "select " + sql.getFields() + " from " + sql.table + sql.getJoins() + sql.getWheres() +
+		sql.getOrderBy() + sql.getLimit() + sql.getOffset()
 }
 
 func (sql *Sql) Update(values H) (int64, error) {
@@ -311,31 +328,8 @@ func (sql *Sql) getFields() string {
 		return "count(*)"
 	}
 	fields := ""
-	if len(sql.leftjoins) == 0 {
-		for _, field := range sql.fields {
-			fields += "`" + field + "`,"
-		}
-	} else {
-		for _, field := range sql.fields {
-			asArr := strings.Split(field, " as ")
-
-			if len(asArr) == 2 {
-				arr := strings.Split(asArr[0], ".")
-				if len(arr) > 1 {
-					fields += arr[0] + ".`" + arr[1] + "`"
-				} else {
-					fields += "`" + field + "`"
-				}
-				fields += " as `" + asArr[1] + "`,"
-			} else if len(asArr) == 1 {
-				arr := strings.Split(field, ".")
-				if len(arr) > 1 {
-					fields += arr[0] + ".`" + arr[1] + "`,"
-				} else {
-					fields += "`" + field + "`,"
-				}
-			}
-		}
+	for _, field := range sql.fields {
+		fields += sql.QuoteField(field, true) + ","
 	}
 	return fields[:len(fields)-1]
 }
@@ -348,14 +342,8 @@ func (sql *Sql) getWheres() string {
 		return ""
 	}
 	wheres := " where "
-	var arr []string
 	for _, where := range sql.wheres {
-		arr = strings.Split(where.field, ".")
-		if len(arr) > 1 {
-			wheres += arr[0] + ".`" + arr[1] + "` " + where.operation + " " + where.qmark + " and "
-		} else {
-			wheres += "`" + where.field + "` " + where.operation + " " + where.qmark + " and "
-		}
+		wheres += sql.QuoteField(where.field, false) + " " + where.operation + " " + where.qmark + " and "
 	}
 
 	if sql.whereRaw != "" {
@@ -363,6 +351,43 @@ func (sql *Sql) getWheres() string {
 	} else {
 		return wheres[:len(wheres)-5]
 	}
+}
+
+func (sql *Sql) AddQuoteChar(fieldName string) string {
+	quoteStr := fieldName
+	if !strings.HasPrefix(quoteStr, "`") && !strings.HasPrefix(quoteStr, " ") {
+		quoteStr = "`" + quoteStr
+	}
+	if !strings.HasSuffix(quoteStr, "`") && !strings.HasSuffix(quoteStr, " ") {
+		quoteStr = quoteStr + "`"
+	}
+	return quoteStr
+}
+
+func (sql *Sql) QuoteField(fieldStr string, as bool) string {
+	quoteField := ""
+	asArr := strings.Split(fieldStr, " as ")
+	if as && len(asArr) == 2 {
+		arr := strings.Split(strings.TrimSpace(asArr[0]), ".")
+
+		if len(arr) > 1 {
+			quoteField += sql.AddQuoteChar(arr[0]) + "." + sql.AddQuoteChar(arr[1])
+		} else {
+			quoteField += sql.AddQuoteChar(fieldStr)
+		}
+
+		quoteField += " as `" + asArr[1] + "`"
+	} else if !as || len(asArr) == 1 {
+		arr := strings.Split(strings.TrimSpace(fieldStr), ".")
+
+		if len(arr) > 1 {
+			quoteField += sql.AddQuoteChar(arr[0]) + "." + sql.AddQuoteChar(arr[1])
+		} else {
+			quoteField += sql.AddQuoteChar(fieldStr)
+		}
+	}
+
+	return quoteField
 }
 
 func (sql *Sql) prepareUpdate(values H) {
