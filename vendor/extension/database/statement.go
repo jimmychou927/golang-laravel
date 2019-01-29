@@ -302,11 +302,23 @@ func (sql *Sql) getFields() string {
 		}
 	} else {
 		for _, field := range sql.fields {
-			arr := strings.Split(field, ".")
-			if len(arr) > 1 {
-				fields += arr[0] + ".`" + arr[1] + "`,"
-			} else {
-				fields += "`" + field + "`,"
+			asArr := strings.Split(field, " as ")
+
+			if len(asArr) == 2 {
+				arr := strings.Split(asArr[0], ".")
+				if len(arr) > 1 {
+					fields += arr[0] + ".`" + arr[1] + "`"
+				} else {
+					fields += "`" + field + "`"
+				}
+				fields += " as `" + asArr[1] + "`,"
+			} else if len(asArr) == 1 {
+				arr := strings.Split(field, ".")
+				if len(arr) > 1 {
+					fields += arr[0] + ".`" + arr[1] + "`,"
+				} else {
+					fields += "`" + field + "`,"
+				}
 			}
 		}
 	}
