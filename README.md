@@ -94,12 +94,23 @@ total, _ := ModelName.Orm().Where("id", "=", 1).Count()
 fmt.Println(total)
 ```
 
+### Select
+```go
+```
+
+### SelectRaw
+```go
+```
+
 ### Join/LeftJoin
 ```go
 result, _ := ModelName.Orm().Join("sub_table", "sub_table.main_id", "=", "main_table.id").All()
 for idx, value := range result {
     // do something ...
 }
+```
+### JoinQuery/LeftJoinQuery
+```go
 ```
 
 ### WhereInQuery
@@ -109,4 +120,11 @@ result, _ := MainModelName.Orm().WhereInQuery("master_id", subQuery).All()
 for idx, value := range result {
     // do something ...
 }
+```
+### GroupBy
+```go
+```
+
+### OrderBy
+```go
 ```

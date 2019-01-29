@@ -20,37 +20,53 @@ type Join struct {
 	fieldB    string
 }
 
+type JoinQuery struct {
+	subSql    string
+	alias     string
+	fieldA    string
+	operation string
+	fieldB    string
+	argsJoin  []interface{}
+}
+
 type RawUpdate struct {
 	expression string
 	args       []interface{}
 }
 
 type Sql struct {
-	fields     []string
-	table      string
-	wheres     []Where
-	innerjoins []Join
-	leftjoins  []Join
-	args       []interface{}
-	order      string
-	offset     string
-	limit      string
-	whereRaw   string
-	updateRaw  []RawUpdate
-	statement  string
+	fields          []string
+	fieldsRaw       string
+	table           string
+	wheres          []Where
+	innerjoins      []Join
+	leftjoins       []Join
+	innerjoinsQuery []JoinQuery
+	leftjoinsQuery  []JoinQuery
+	argsJoin        []interface{}
+	args            []interface{}
+	order           string
+	group           string
+	offset          string
+	limit           string
+	whereRaw        string
+	updateRaw       []RawUpdate
+	statement       string
 }
 
 var SqlPool = sync.Pool{
 	New: func() interface{} {
 		return &Sql{
-			fields:     make([]string, 0),
-			table:      "",
-			args:       make([]interface{}, 0),
-			wheres:     make([]Where, 0),
-			innerjoins: make([]Join, 0),
-			leftjoins:  make([]Join, 0),
-			updateRaw:  make([]RawUpdate, 0),
-			whereRaw:   "",
+			fields:          make([]string, 0),
+			table:           "",
+			args:            make([]interface{}, 0),
+			wheres:          make([]Where, 0),
+			innerjoins:      make([]Join, 0),
+			leftjoins:       make([]Join, 0),
+			innerjoinsQuery: make([]JoinQuery, 0),
+			leftjoinsQuery:  make([]JoinQuery, 0),
+			updateRaw:       make([]RawUpdate, 0),
+			whereRaw:        "",
 		}
 	},
 }
@@ -76,8 +92,20 @@ func (sql *Sql) Select(fields ...string) *Sql {
 	return sql
 }
 
+func (sql *Sql) SelectRaw(fields string) *Sql {
+	if fields != "" {
+		sql.fieldsRaw = ", " + fields
+	}
+	return sql
+}
+
 func (sql *Sql) OrderBy(filed string, order string) *Sql {
 	sql.order = filed + " " + order
+	return sql
+}
+
+func (sql *Sql) GroupBy(fileds ...string) *Sql {
+	sql.group = strings.Join(fileds, ",")
 	return sql
 }
 
@@ -139,6 +167,18 @@ func (sql *Sql) WhereNotIn(field string, arg []interface{}) *Sql {
 	return sql
 }
 
+func (sql *Sql) WhereNotInQuery(field string, subSql *Sql) *Sql {
+	sql.wheres = append(sql.wheres, Where{
+		field:     field,
+		operation: "not in",
+		qmark:     "(" + subSql.ToSQL() + ")",
+	})
+	if len(subSql.args) > 0 {
+		sql.args = append(sql.args, subSql.args...)
+	}
+	return sql
+}
+
 func (sql *Sql) Find(arg interface{}) (map[string]interface{}, error) {
 	return sql.Where("id", "=", arg).First()
 }
@@ -178,12 +218,36 @@ func (sql *Sql) Join(table string, fieldA string, operation string, fieldB strin
 	return sql
 }
 
+func (sql *Sql) JoinQuery(subSql *Sql, alias string, fieldA string, operation string, fieldB string) *Sql {
+	sql.innerjoinsQuery = append(sql.innerjoinsQuery, JoinQuery{
+		subSql:    "(" + subSql.ToSQL() + ")",
+		alias:     alias,
+		fieldA:    fieldA,
+		fieldB:    fieldB,
+		operation: operation,
+		argsJoin:  subSql.args,
+	})
+	return sql
+}
+
 func (sql *Sql) LeftJoin(table string, fieldA string, operation string, fieldB string) *Sql {
 	sql.leftjoins = append(sql.leftjoins, Join{
 		fieldA:    fieldA,
 		fieldB:    fieldB,
 		table:     table,
 		operation: operation,
+	})
+	return sql
+}
+
+func (sql *Sql) LeftJoinQuery(subSql *Sql, alias string, fieldA string, operation string, fieldB string) *Sql {
+	sql.leftjoinsQuery = append(sql.leftjoinsQuery, JoinQuery{
+		subSql:    "(" + subSql.ToSQL() + ")",
+		alias:     alias,
+		fieldA:    fieldA,
+		fieldB:    fieldB,
+		operation: operation,
+		argsJoin:  subSql.args,
 	})
 	return sql
 }
@@ -198,10 +262,11 @@ func (sql *Sql) LeftJoin(table string, fieldA string, operation string, fieldB s
 func (sql *Sql) First() (map[string]interface{}, error) {
 	defer RecycleSql(sql)
 
-	sql.statement = "select " + sql.getFields() + " from " + sql.table + sql.getJoins() + sql.getWheres() +
-		sql.getOrderBy() + sql.getLimit() + sql.getOffset()
-
-	res, _ := GetConnection().Query(sql.statement, sql.args...)
+	sql.Take(1)
+	sql.statement = sql.ToSQL()
+	args := sql.argsJoin
+	args = append(args, sql.args)
+	res, _ := GetConnection().Query(sql.statement, args...)
 
 	if len(res) < 1 {
 		return nil, errors.New("out of index")
@@ -212,17 +277,17 @@ func (sql *Sql) First() (map[string]interface{}, error) {
 func (sql *Sql) All() ([]map[string]interface{}, error) {
 	defer RecycleSql(sql)
 
-	sql.statement = "select " + sql.getFields() + " from " + sql.table + sql.getJoins() + sql.getWheres() +
-		sql.getOrderBy() + sql.getLimit() + sql.getOffset()
-
-	res, _ := GetConnection().Query(sql.statement, sql.args...)
+	sql.statement = sql.ToSQL()
+	args := sql.argsJoin
+	args = append(args, sql.args)
+	res, _ := GetConnection().Query(sql.statement, args...)
 
 	return res, nil
 }
 
 func (sql *Sql) ToSQL() string {
-	return "select " + sql.getFields() + " from " + sql.table + sql.getJoins() + sql.getWheres() +
-		sql.getOrderBy() + sql.getLimit() + sql.getOffset()
+	return "select " + sql.getFields() + " from " + sql.table + sql.getJoins() + sql.getJoinsQuery() + sql.getWheres() +
+		sql.getGroupBy() + sql.getOrderBy() + sql.getLimit() + sql.getOffset()
 }
 
 func (sql *Sql) Update(values H) (int64, error) {
@@ -306,32 +371,68 @@ func (sql *Sql) getOrderBy() string {
 	return " order by " + sql.order + " "
 }
 
-func (sql *Sql) getJoins() string {
-	if len(sql.leftjoins) == 0 {
+func (sql *Sql) getGroupBy() string {
+	if sql.group == "" {
 		return ""
 	}
+	return " group by " + sql.group + " "
+}
+
+func (sql *Sql) getJoins() string {
 	joins := ""
-	for _, join := range sql.innerjoins {
-		joins += " join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+	if len(sql.innerjoins) > 0 {
+		for _, join := range sql.innerjoins {
+			joins += " join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+		}
 	}
-	for _, join := range sql.leftjoins {
-		joins += " left join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+	if len(sql.leftjoins) > 0 {
+		for _, join := range sql.leftjoins {
+			joins += " left join " + join.table + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+		}
+	}
+	return joins
+}
+
+func (sql *Sql) getJoinsQuery() string {
+	joins := ""
+	if len(sql.innerjoinsQuery) > 0 {
+		for _, join := range sql.innerjoinsQuery {
+			joins += " join (" + join.subSql + ") as " + join.alias + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+
+			if len(join.argsJoin) > 0 {
+				sql.argsJoin = append(sql.argsJoin, join.argsJoin...)
+			}
+		}
+	}
+	if len(sql.leftjoinsQuery) > 0 {
+		for _, join := range sql.leftjoinsQuery {
+			joins += " left join (" + join.subSql + ") as " + join.alias + " on " + join.fieldA + " " + join.operation + " " + join.fieldB + " "
+
+			if len(join.argsJoin) > 0 {
+				sql.argsJoin = append(sql.argsJoin, join.argsJoin...)
+			}
+		}
 	}
 	return joins
 }
 
 func (sql *Sql) getFields() string {
 	if len(sql.fields) == 0 {
-		return "*"
+		if sql.fieldsRaw == "" {
+			return "*"
+		}
+
+		return sql.fieldsRaw[1:]
 	}
 	if sql.fields[0] == "count(*)" {
-		return "count(*)"
+		return "count(*)" + sql.fieldsRaw
 	}
 	fields := ""
 	for _, field := range sql.fields {
-		fields += sql.QuoteField(field, true) + ","
+		fields += sql.QuoteField(field) + ","
 	}
-	return fields[:len(fields)-1]
+
+	return fields[:len(fields)-1] + sql.fieldsRaw
 }
 
 func (sql *Sql) getWheres() string {
@@ -343,7 +444,7 @@ func (sql *Sql) getWheres() string {
 	}
 	wheres := " where "
 	for _, where := range sql.wheres {
-		wheres += sql.QuoteField(where.field, false) + " " + where.operation + " " + where.qmark + " and "
+		wheres += sql.QuoteField(where.field) + " " + where.operation + " " + where.qmark + " and "
 	}
 
 	if sql.whereRaw != "" {
@@ -364,29 +465,14 @@ func (sql *Sql) AddQuoteChar(fieldName string) string {
 	return quoteStr
 }
 
-func (sql *Sql) QuoteField(fieldStr string, as bool) string {
+func (sql *Sql) QuoteField(fieldStr string) string {
 	quoteField := ""
-	asArr := strings.Split(fieldStr, " as ")
-	if as && len(asArr) == 2 {
-		arr := strings.Split(strings.TrimSpace(asArr[0]), ".")
-
-		if len(arr) > 1 {
-			quoteField += sql.AddQuoteChar(arr[0]) + "." + sql.AddQuoteChar(arr[1])
-		} else {
-			quoteField += sql.AddQuoteChar(fieldStr)
-		}
-
-		quoteField += " as `" + asArr[1] + "`"
-	} else if !as || len(asArr) == 1 {
-		arr := strings.Split(strings.TrimSpace(fieldStr), ".")
-
-		if len(arr) > 1 {
-			quoteField += sql.AddQuoteChar(arr[0]) + "." + sql.AddQuoteChar(arr[1])
-		} else {
-			quoteField += sql.AddQuoteChar(fieldStr)
-		}
+	arr := strings.Split(strings.TrimSpace(fieldStr), ".")
+	if len(arr) > 1 {
+		quoteField += sql.AddQuoteChar(arr[0]) + "." + sql.AddQuoteChar(arr[1])
+	} else {
+		quoteField += sql.AddQuoteChar(fieldStr)
 	}
-
 	return quoteField
 }
 
