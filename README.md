@@ -3,12 +3,47 @@
 ## Contents
 
 - [Installation](#installation)
+- [Route Examples](#route-examples)
 - [ORM Examples](#orm-examples)
 
 ## Installation
 ```
 cd $GOPATH/src
 git clone https://github.com/jimmychou927/golang-laravel
+```
+
+## Route Examples
+Router definition in file route/web.go
+```go
+route.GET("/", "Home@Display")
+
+route.GET("/login", "Auth@Display")
+route.POST("/", "Auth@Login")
+```
+Controller Auth in folder app/http/controller/auth.go
+```go
+package controller
+
+import (
+	"github.com/gin-gonic/gin"
+)
+
+type Auth struct {
+	Controller
+}
+
+func (this *Auth) Display(c *gin.Context) {
+    // do GET Request procedure ...
+}
+
+func (this *Auth) Login(c *gin.Context) {
+    // do POST Request procedure ...
+}
+
+func init() {
+
+	register(Auth{})
+}
 ```
 
 ## ORM Examples
