@@ -1,15 +1,11 @@
 package route
 
-import (
-	"golang-laravel/app/http/controller"
+import "extension/reflection"
 
-	"github.com/gin-gonic/gin"
-)
-
-func Setup(e *gin.Engine) {
+func Setup(route reflection.WebRoute) {
 
 	// e.Use(middleware.IsAuth)
 
-	e.GET("/", (&controller.Home{}).Display)
-	e.GET("/home", (&controller.Home{}).Display)
+	e.GET("/", "Home@Display")
+	e.GET("/home", "Home@Display")
 }

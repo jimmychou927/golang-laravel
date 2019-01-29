@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"extension/database"
+	"extension/reflection"
 	"fmt"
 	"golang-laravel/app/exceptions"
 	"golang-laravel/config"
@@ -81,7 +82,8 @@ func Start() {
 	/******************************
 	 * Initialize custom uri path *
 	 ******************************/
-	route.Setup(r)
+	router := &reflection.Router{Engine: r}
+	route.Setup(router)
 
 	r.Run(":" + strconv.Itoa(config.Get().SERVER.PORT))
 }

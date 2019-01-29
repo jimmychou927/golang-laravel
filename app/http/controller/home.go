@@ -1,6 +1,8 @@
 package controller
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+)
 
 type Home struct {
 	Controller
@@ -9,4 +11,9 @@ type Home struct {
 func (this *Home) Display(c *gin.Context) {
 
 	this.View(c, "home.index", map[string]interface{}{})
+}
+
+func init() {
+
+	register(Home{})
 }
