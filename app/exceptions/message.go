@@ -34,7 +34,10 @@ func MessageToBrowser(out io.Writer) gin.HandlerFunc {
 
 		defer func() {
 			if err := recover(); err != nil {
-				var brokenPipe bool
+				var brokenPipe, brokenMsg bool
+				if strings.HasPrefix(err.(string), "<p/>") {
+					brokenMsg = true
+				}
 				if ne, ok := err.(*net.OpError); ok {
 					if se, ok := ne.Err.(*os.SyscallError); ok {
 						if strings.Contains(strings.ToLower(se.Error()), "broken pipe") || strings.Contains(strings.ToLower(se.Error()), "connection reset by peer") {
@@ -47,13 +50,16 @@ func MessageToBrowser(out io.Writer) gin.HandlerFunc {
 				httprequest, _ := httputil.DumpRequest(c.Request, false)
 				if brokenPipe {
 					exceptionMsg := fmt.Sprintf("%s\n%s", err, string(httprequest))
-					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg))
+					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg, true))
+				} else if brokenMsg {
+					exceptionMsg := fmt.Sprintf("%s", err)
+					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg, false))
 				} else if gin.IsDebugging() {
 					exceptionMsg := fmt.Sprintf("%s\n%s", err, stack)
-					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg))
+					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg, true))
 				} else {
 					exceptionMsg := fmt.Sprintf("%s\n%s", err, stack)
-					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg))
+					c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", render(exceptionMsg, true))
 				}
 			}
 		}()
@@ -123,7 +129,11 @@ func function(pc uintptr) []byte {
 	return name
 }
 
-func render(content string) []byte {
+func render(content string, css bool) []byte {
+
+	if !css {
+		return []byte(content)
+	}
 
 	style := `
 		<style>

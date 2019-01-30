@@ -1,7 +1,7 @@
 package reflection
 
 import (
-	"fmt"
+	"extension/print"
 	"golang-laravel/app/http/controller"
 	"reflect"
 	"strings"
@@ -29,7 +29,7 @@ func (h *Handler) handle(request *gin.Context) {
 	ctrlValue := reflect.New(h.controller)
 	m := ctrlValue.MethodByName(h.method)
 	if !m.IsValid() {
-		fmt.Printf("[ERROR] handler: find no method: %+v\n", h.controller.String()+"."+h.method)
+		print.Errf("[ERROR] handler: find no method: %+v\n", h.controller.String()+"."+h.method)
 		return
 	}
 	m.Call([]reflect.Value{reflect.ValueOf(request)})
@@ -44,7 +44,7 @@ func (r *Router) binding(method string, url string, handler string) WebRoute {
 
 	ctrlType := controller.ControllerMap[handlerData[0]]
 	if ctrlType == nil {
-		fmt.Printf("[ERROR] binding fail: unregist controller: %+v\n", handlerData[0])
+		print.Errf("[ERROR] binding fail: unregist controller: %+v\n", handlerData[0])
 		return r
 	}
 
