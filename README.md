@@ -2,9 +2,15 @@
 
 ## Contents
 
+- [Intro](#intro)
 - [Installation](#installation)
 - [Route Examples](#route-examples)
 - [ORM Examples](#orm-examples)
+
+## Intro
+Based on Gin Web Framework and Go-Admin modules
+Gin Web Framework https://github.com/gin-gonic/gin
+GoAdmin https://github.com/chenhg5/go-admin
 
 ## Installation
 ```
@@ -47,7 +53,7 @@ func init() {
 ```
 
 ## ORM Examples
-
+Based on Go-Admin (https://github.com/chenhg5/go-admin) db module
 ### Find
 ```go
 item, _ := ModelName.Orm().Find(1)
@@ -96,10 +102,12 @@ fmt.Println(total)
 
 ### Select
 ```go
+_, _ = ModelName.Orm().Select("id", "first_name", "last_name", "pwd").All()
 ```
 
 ### SelectRaw
 ```go
+_, _ = ModelName.Orm().SelectRaw("pwd as password").SelectRaw("concat(first_name, ' ', last_name) as name").All()
 ```
 
 ### Join/LeftJoin
@@ -109,8 +117,14 @@ for idx, value := range result {
     // do something ...
 }
 ```
+
 ### JoinQuery/LeftJoinQuery
 ```go
+subQuery := SubModelName.Orm().Where("type", "=", 3)
+result, _ := MainModelName.Orm().JoinQuery(subQuery, "sub_alias", "sub_alias.main_id", "=", "main_model.id")
+for idx, value := range result {
+    // do something ...
+}
 ```
 
 ### WhereInQuery
@@ -121,10 +135,21 @@ for idx, value := range result {
     // do something ...
 }
 ```
+
 ### GroupBy
 ```go
+_, _ = ModelName.Orm().Where("type", "=", 3).GroupBy("status")
+_, _ = ModelName.Orm().Where("type", "=", 3).GroupBy("status", "user_id", "date")
+for idx, value := range result {
+    // do something ...
+}
 ```
 
 ### OrderBy
 ```go
+_, _ = ModelName.Orm().Where("type", "=", 3).OrderBy("status", "asc").OrderBy("user_id", "desc").OrderBy("date", "desc")
+for idx, value := range result {
+    // do something ...
+}
 ```
+
