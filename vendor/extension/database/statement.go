@@ -23,54 +23,44 @@ type Join struct {
 	args      []interface{}
 }
 
-type JoinQuery struct {
-	subSql    string
-	alias     string
-	fieldA    string
-	operation string
-	fieldB    string
-	argsJoin  []interface{}
-}
-
 type RawUpdate struct {
 	expression string
 	args       []interface{}
 }
 
 type Sql struct {
-	fields          []string
-	fieldsRaw       string
-	table           string
-	wheres          []Where
-	joins           []Join
-	innerjoins      []Join
-	leftjoins       []Join
-	innerjoinsQuery []JoinQuery
-	leftjoinsQuery  []JoinQuery
-	argsJoin        []interface{}
-	args            []interface{}
-	order           []string
-	group           string
-	offset          string
-	limit           string
-	whereRaw        string
-	updateRaw       []RawUpdate
-	statement       string
+	fields    []string
+	fieldsRaw string
+	table     string
+	wheres    []Where
+	joins     []Join
+	argsJoin  []interface{}
+	args      []interface{}
+	order     []string
+	group     string
+	offset    string
+	limit     string
+	whereRaw  string
+	updateRaw []RawUpdate
+	statement string
 }
 
 var SqlPool = sync.Pool{
 	New: func() interface{} {
 		return &Sql{
-			fields:          make([]string, 0),
-			table:           "",
-			args:            make([]interface{}, 0),
-			wheres:          make([]Where, 0),
-			innerjoins:      make([]Join, 0),
-			leftjoins:       make([]Join, 0),
-			innerjoinsQuery: make([]JoinQuery, 0),
-			leftjoinsQuery:  make([]JoinQuery, 0),
-			updateRaw:       make([]RawUpdate, 0),
-			whereRaw:        "",
+			fields:    make([]string, 0),
+			fieldsRaw: "",
+			table:     "",
+			wheres:    make([]Where, 0),
+			joins:     make([]Join, 0),
+			argsJoin:  make([]interface{}, 0),
+			args:      make([]interface{}, 0),
+			order:     make([]string, 0),
+			group:     "",
+			offset:    "",
+			limit:     "",
+			whereRaw:  "",
+			updateRaw: make([]RawUpdate, 0),
 		}
 	},
 }
@@ -188,13 +178,16 @@ func (sql *Sql) Count() (int64, error) {
 		res map[string]interface{}
 		err error
 	)
-	if res, err = sql.Select("count(*)").First(); err != nil {
+	if res, err = sql.SelectRaw("count(*) as total").First(); err != nil {
 		return 0, err
 	}
-	return res["count(*)"].(int64), nil
+	return res["total"].(int64), nil
 }
 
 func (sql *Sql) WhereRaw(raw string, args ...interface{}) *Sql {
+	if raw == "" {
+		return sql
+	}
 	sql.whereRaw = raw
 	sql.args = append(sql.args, args...)
 	return sql
@@ -507,36 +500,47 @@ func (sql *Sql) prepareUpdate(values H) {
 }
 
 func (sql *Sql) prepareInsert(values H) {
-	fields := "("
-	quesMark := "("
+	fields := make([]string, 0)
+	quesMark := make([]string, 0)
 
 	for key, value := range values {
-		fields += sql.quoteField(key) + ","
-		quesMark += "?,"
+		fields = append(fields, sql.quoteField(key))
+		quesMark = append(quesMark, "?")
 		sql.args = append(sql.args, value)
 	}
-	fields = fields[:len(fields)-1] + ")"
-	quesMark = quesMark[:len(quesMark)-1] + ")"
 
-	sql.statement = "insert into " + sql.table + fields + " values " + quesMark
+	sql.statement = "insert into " + sql.table +
+		"(" + strings.Join(fields, ", ") + ") values " +
+		"(" + strings.Join(quesMark, ", ") + ")"
 }
 
 func (sql *Sql) empty() *Sql {
 	sql.fields = make([]string, 0)
-	sql.args = make([]interface{}, 0)
-	sql.table = ""
+	sql.fieldsRaw = ""
 	sql.wheres = make([]Where, 0)
-	sql.leftjoins = make([]Join, 0)
+	sql.joins = make([]Join, 0)
+	sql.argsJoin = make([]interface{}, 0)
+	sql.args = make([]interface{}, 0)
+	sql.order = make([]string, 0)
+	sql.group = ""
+	sql.offset = ""
+	sql.limit = ""
+	sql.whereRaw = ""
+	sql.updateRaw = make([]RawUpdate, 0)
+
 	return sql
 }
 
 func RecycleSql(sql *Sql) {
 	sql.fields = make([]string, 0)
+	sql.fieldsRaw = ""
 	sql.table = ""
 	sql.wheres = make([]Where, 0)
-	sql.leftjoins = make([]Join, 0)
+	sql.joins = make([]Join, 0)
+	sql.argsJoin = make([]interface{}, 0)
 	sql.args = make([]interface{}, 0)
 	sql.order = make([]string, 0)
+	sql.group = ""
 	sql.offset = ""
 	sql.limit = ""
 	sql.whereRaw = ""
@@ -545,4 +549,3 @@ func RecycleSql(sql *Sql) {
 
 	SqlPool.Put(sql)
 }
-
