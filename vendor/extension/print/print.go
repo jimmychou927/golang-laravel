@@ -1,10 +1,25 @@
 package print
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
-func Ln(args ...interface{}) {
+func Msg(args ...interface{}) {
 
-	panic("<p/>" + fmt.Sprintln(args))
+	message := ""
+
+	for _, value := range args {
+		s, err := json.MarshalIndent(value, "", "   ")
+
+		if err != nil {
+			message += fmt.Sprintln(err)
+		} else {
+			message += fmt.Sprintln(string(s))
+		}
+	}
+
+	panic("<pre>\n" + message + "\n</pre>")
 }
 
 func Err(args ...interface{}) {

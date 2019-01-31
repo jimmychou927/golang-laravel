@@ -6,6 +6,8 @@
 - [Installation](#installation)
 - [Route Examples](#route-examples)
 - [ORM Examples](#orm-examples)
+- [Exception](#exception)
+- [Message](#message)
 
 ## Intro
 Based on Gin Web Framework and Go-Admin modules
@@ -169,5 +171,33 @@ _, _ = ModelName.Orm().Where("type", 3).OrderBy("status", "asc").OrderBy("user_i
 // fetch result
 for idx, value := range result {
     // do something ...
+}
+```
+
+### Exception
+Throw console message to browser
+
+### Message
+Display variable content on browser
+```go
+import "extension/print"
+
+func main() {
+    data := map[string]map[string]interface{}{
+        "header": {
+            "height": 200,
+            "content": "my title",
+        },
+        "content": {
+            "height": 500,
+            "content": "my content",
+        },
+        "footer": {
+            "height": 300,
+            "content": "my footer",
+        },
+    }
+
+    print.Msg(data)
 }
 ```
