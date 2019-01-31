@@ -116,8 +116,57 @@ func (sql *Sql) Take(take int) *Sql {
 	return sql
 }
 
+func (sql *Sql) convertWhereArgument(arg interface{}) ([]interface{}, string) {
+	conv := make([]interface{}, 0)
+	qmark := ""
+
+	switch arg.(type) {
+	case []int:
+		if len(arg.([]int)) < 1 {
+			return nil, ""
+		}
+		qmark = "(" + strings.Repeat("?, ", len(arg.([]int))-1) + "?)"
+		for _, arrVar := range arg.([]int) {
+			conv = append(conv, arrVar)
+		}
+	case []string:
+		if len(arg.([]string)) < 1 {
+			return nil, ""
+		}
+		qmark = "(" + strings.Repeat("?, ", len(arg.([]string))-1) + "?)"
+		for _, arrVar := range arg.([]string) {
+			conv = append(conv, arrVar)
+		}
+	case *Sql:
+		qmark = "(" + arg.(*Sql).ToSQL() + ")"
+		conv = arg.(*Sql).args
+	default:
+		return nil, ""
+	}
+
+	return conv, qmark
+}
+
+func (sql *Sql) Where(field string, args ...interface{}) *Sql {
+	if len(args) == 1 {
+		return sql.addWhereConditions(field, "=", []interface{}{args[0]}, "?")
+	}
+
+	return sql.addWhereConditions(field, args[0].(string), []interface{}{args[1]}, "?")
+}
+
+func (sql *Sql) WhereIn(field string, arg interface{}) *Sql {
+	args, qmark := sql.convertWhereArgument(arg)
+	return sql.addWhereConditions(field, "in", args, qmark)
+}
+
+func (sql *Sql) WhereNotIn(field string, arg interface{}) *Sql {
+	args, qmark := sql.convertWhereArgument(arg)
+	return sql.addWhereConditions(field, "not in", args, qmark)
+}
+
 func (sql *Sql) addWhereConditions(field string, operation string, args []interface{}, qmark string) *Sql {
-	if field == "" {
+	if field == "" || args == nil {
 		return sql
 	}
 	sql.wheres = append(sql.wheres, Where{
@@ -128,44 +177,6 @@ func (sql *Sql) addWhereConditions(field string, operation string, args []interf
 	if len(args) > 0 {
 		sql.args = append(sql.args, args...)
 	}
-	return sql
-}
-
-func (sql *Sql) Where(field string, operation string, arg interface{}) *Sql {
-	if operation == "" {
-		operation = "="
-	}
-	sql.addWhereConditions(field, operation, []interface{}{arg}, "?")
-	return sql
-}
-
-func (sql *Sql) WhereIn(field string, arg []interface{}) *Sql {
-	if len(arg) == 0 {
-		return sql
-	}
-	qmark := "(" + strings.Repeat("?, ", len(arg)-1) + " ?)"
-	sql.addWhereConditions(field, "in", arg, qmark)
-	return sql
-}
-
-func (sql *Sql) WhereInQuery(field string, subSql *Sql) *Sql {
-	qmark := "(" + subSql.ToSQL() + ")"
-	sql.addWhereConditions(field, "in", subSql.args, qmark)
-	return sql
-}
-
-func (sql *Sql) WhereNotIn(field string, arg []interface{}) *Sql {
-	if len(arg) == 0 {
-		return sql
-	}
-	qmark := "(" + strings.Repeat("?, ", len(arg)-1) + " ?)"
-	sql.addWhereConditions(field, "not in", arg, qmark)
-	return sql
-}
-
-func (sql *Sql) WhereNotInQuery(field string, subSql *Sql) *Sql {
-	qmark := "(" + subSql.ToSQL() + ")"
-	sql.addWhereConditions(field, "not in", subSql.args, qmark)
 	return sql
 }
 
@@ -201,7 +212,57 @@ func (sql *Sql) UpdateRaw(raw string, args ...interface{}) *Sql {
 	return sql
 }
 
+func (sql *Sql) convertJoinArgument(tbl interface{}, args ...string) (string, string, string, string, string, []interface{}) {
+	table := ""
+	alias := ""
+	fieldA := ""
+	operation := ""
+	fieldB := ""
+
+	if len(args) == 3 {
+		fieldA = args[0]
+		operation = args[1]
+		fieldB = args[2]
+	} else if len(args) == 4 {
+		alias = args[0]
+		fieldA = args[1]
+		operation = args[2]
+		fieldB = args[3]
+	} else {
+		return "", "", "", "", "", nil
+	}
+
+	switch tbl.(type) {
+	case string:
+		table = tbl.(string)
+		return table, alias, fieldA, operation, fieldB, []interface{}{}
+	case *Sql:
+		table = "(" + tbl.(*Sql).ToSQL() + ")"
+		return table, alias, fieldA, operation, fieldB, tbl.(*Sql).args
+	}
+
+	return "", "", "", "", "", nil
+}
+
+func (sql *Sql) Join(tbl interface{}, args ...string) *Sql {
+	jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs := sql.convertJoinArgument(tbl, args...)
+	return sql.addJoinConditions("inner", jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs)
+}
+
+func (sql *Sql) LeftJoin(tbl interface{}, args ...string) *Sql {
+	jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs := sql.convertJoinArgument(tbl, args...)
+	return sql.addJoinConditions("left", jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs)
+}
+
+func (sql *Sql) RightJoin(tbl interface{}, args ...string) *Sql {
+	jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs := sql.convertJoinArgument(tbl, args...)
+	return sql.addJoinConditions("right", jointTable, JoinAlias, fieldA, operation, fieldB, joinArgs)
+}
+
 func (sql *Sql) addJoinConditions(method string, table string, alias string, fieldA string, operation string, fieldB string, args []interface{}) *Sql {
+	if table == "" {
+		return sql
+	}
 	sql.joins = append(sql.joins, Join{
 		method:    method,
 		fieldA:    fieldA,
@@ -211,39 +272,6 @@ func (sql *Sql) addJoinConditions(method string, table string, alias string, fie
 		operation: operation,
 		args:      args,
 	})
-	return sql
-}
-
-func (sql *Sql) Join(table string, fieldA string, operation string, fieldB string) *Sql {
-	sql.addJoinConditions("inner", table, "", fieldA, operation, fieldB, []interface{}{})
-	return sql
-}
-
-func (sql *Sql) LeftJoin(table string, fieldA string, operation string, fieldB string) *Sql {
-	sql.addJoinConditions("left", table, "", fieldA, operation, fieldB, []interface{}{})
-	return sql
-}
-
-func (sql *Sql) RightJoin(table string, fieldA string, operation string, fieldB string) *Sql {
-	sql.addJoinConditions("right", table, "", fieldA, operation, fieldB, []interface{}{})
-	return sql
-}
-
-func (sql *Sql) JoinQuery(subSql *Sql, alias string, fieldA string, operation string, fieldB string) *Sql {
-	table := "(" + subSql.ToSQL() + ")"
-	sql.addJoinConditions("inner", table, alias, fieldA, operation, fieldB, subSql.args)
-	return sql
-}
-
-func (sql *Sql) LeftJoinQuery(subSql *Sql, alias string, fieldA string, operation string, fieldB string) *Sql {
-	table := "(" + subSql.ToSQL() + ")"
-	sql.addJoinConditions("left", table, alias, fieldA, operation, fieldB, subSql.args)
-	return sql
-}
-
-func (sql *Sql) RightJoinQuery(subSql *Sql, alias string, fieldA string, operation string, fieldB string) *Sql {
-	table := "(" + subSql.ToSQL() + ")"
-	sql.addJoinConditions("right", table, alias, fieldA, operation, fieldB, subSql.args)
 	return sql
 }
 
