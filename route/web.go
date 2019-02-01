@@ -4,8 +4,8 @@ import "extension/reflection"
 
 func Setup(route reflection.WebRoute) {
 
-	// e.Use(middleware.IsAuth)
+	// route.Use(middleware.IsAuth)
 
-	e.GET("/", "Home@Display")
-	e.GET("/home", "Home@Display")
+	route.GET("/", "Home@Display")
+	route.GET("/home", "Home@Display")
 }
